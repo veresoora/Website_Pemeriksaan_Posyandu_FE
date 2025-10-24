@@ -1,97 +1,115 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-
-const dataBalitaAwal = [
-  {
-    id: 1,
-    nama: "Rina",
-    umur: "2 tahun",
-    berat: "12 kg",
-    tinggi: "85 cm",
-    alamat: "Jl. Merpati No. 3",
-    namaOrtu: "Siti Rahma",
-  },
-  {
-    id: 2,
-    nama: "Budi",
-    umur: "3 tahun",
-    berat: "14 kg",
-    tinggi: "90 cm",
-    alamat: "Jl. Mawar No. 5",
-    namaOrtu: "Ahmad Yusuf",
-  },
-];
-
-const dataIbuHamilAwal = [
-  {
-    id: 1,
-    nama: "Siti",
-    umur: "28 tahun",
-    usiaKandungan: "6 bulan",
-    berat: "60 kg",
-    alamat: "Jl. Anggrek No. 7",
-    tekananDarah: "110/70 mmHg",
-  },
-  {
-    id: 2,
-    nama: "Ayu",
-    umur: "31 tahun",
-    usiaKandungan: "8 bulan",
-    berat: "65 kg",
-    alamat: "Jl. Melati No. 9",
-    tekananDarah: "115/75 mmHg",
-  },
-];
+import axios from "axios";
 
 export default function DetailPasien() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Ambil query parameter `type`
+  const [pasien, setPasien] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Ambil ?type dari URL
   const queryParams = new URLSearchParams(location.search);
   const rawType = queryParams.get("type");
 
-  // Normalisasi type biar seragam
   const type =
-    rawType?.toLowerCase() === "ibu" || rawType?.toLowerCase() === "ibuhamil"
-      ? "ibuHamil"
+    rawType?.toLowerCase() === "ibu_hamil" || rawType?.toLowerCase() === "ibu"
+      ? "ibu_hamil"
       : "balita";
 
-  // Simulasi data dari "database"
-  const [dataBalita, setDataBalita] = useState(dataBalitaAwal);
-  const [dataIbuHamil, setDataIbuHamil] = useState(dataIbuHamilAwal);
+  // ==========================
+  // FETCH DETAIL PASIEN
+  // ==========================
+  useEffect(() => {
+    const fetchDetailPasien = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          `http://10.200.180.222:3000/api/pasien/${id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setPasien(response.data.data);
+      } catch (err) {
+        console.error("Gagal mengambil data pasien:", err);
+        alert("Gagal mengambil data pasien.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Tentukan data pasien berdasarkan type
-  const pasien =
-    type === "balita"
-      ? dataBalita.find((item) => item.id === Number(id))
-      : dataIbuHamil.find((item) => item.id === Number(id));
+    fetchDetailPasien();
+  }, [id]);
 
-  // ======= HANDLER =======
-  const handleHapus = () => {
-    const konfirmasi = confirm("Apakah Anda yakin ingin menghapus data ini?");
+  // ==========================
+  // HANDLER BUTTON
+  // ==========================
+
+  // Hapus pasien
+  const handleHapus = async () => {
+    const konfirmasi = confirm("Apakah Anda yakin ingin menghapus pasien ini?");
     if (!konfirmasi) return;
 
-    if (type === "balita") {
-      setDataBalita(dataBalita.filter((item) => item.id !== Number(id)));
-    } else {
-      setDataIbuHamil(dataIbuHamil.filter((item) => item.id !== Number(id)));
-    }
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`http://10.200.180.222:3000/api/pasien/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-    alert("Data berhasil dihapus.");
-    navigate(-1);
+      alert("Pasien berhasil dihapus.");
+      navigate("/pasien");
+    } catch (err) {
+      console.error("Gagal menghapus pasien:", err);
+      alert("Gagal menghapus pasien.");
+    }
   };
 
+  // Tambah ke antrean
+  const handleAntrean = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        `http://10.200.180.222:3000/api/pasien/add-to-queue`,
+        {
+          pasienId: id,
+          tanggal: new Date().toISOString().slice(0, 10),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      alert("Pasien berhasil ditambahkan ke antrian hari ini.");
+    } catch (err: any) {
+      console.error("Gagal menambahkan ke antrean:", err);
+      alert(
+        err.response?.data?.message || "Gagal menambahkan pasien ke antrian."
+      );
+    }
+  };
+
+  // Edit pasien
   const handleEdit = () => {
     navigate(`/editpasien/${id}?type=${type}`);
   };
 
-  const handleAntrean = () => {
-    navigate(`/antrean/${id}?type=${type}`);
-  };
+  // ==========================
+  // RENDER
+  // ==========================
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen text-gray-600">
+        Memuat data pasien...
+      </div>
+    );
+  }
 
-  // Jika data tidak ditemukan
   if (!pasien) {
     return (
       <div className="flex flex-col justify-center items-center h-screen text-gray-700 bg-gray-50">
@@ -106,7 +124,55 @@ export default function DetailPasien() {
     );
   }
 
-  // ======= RENDER DETAIL =======
+  // ==========================
+  // RENDER DETAIL SESUAI TYPE
+  // ==========================
+  const renderField = (label: string, value: any) => (
+    <div className="py-2 flex justify-between">
+      <span className="font-medium text-gray-600">{label}</span>
+      <span className="text-gray-800 text-right">{value ?? "-"}</span>
+    </div>
+  );
+
+  const renderDetail = () => {
+    if (type === "balita") {
+      return (
+        <>
+          {renderField("Nama Balita", pasien.name)}
+          {renderField("Nama Ibu", pasien.motherName)}
+          {renderField("RT", pasien.rt)}
+          {renderField("Jenis Kelamin", pasien.gender === "L" ? "Laki-laki" : "Perempuan")}
+          {renderField("Tanggal Lahir", pasien.birthDate)}
+          {renderField("Alamat", pasien.address)}
+          {renderField("Status KB", pasien.kb ? "Ya" : "Tidak")}
+          {renderField("Status PUS", pasien.pus ? "Ya" : "Tidak")}
+          {renderField("Status WUS", pasien.wus ? "Ya" : "Tidak")}
+          {renderField("Imunisasi", pasien.imunisasi)}
+        </>
+      );
+    } else if (type === "ibu_hamil") {
+      return (
+        <>
+          {renderField("Nama Ibu Hamil", pasien.name)}
+          {renderField("NIK", pasien.nik)}
+          {renderField("Nama Suami", pasien.namaSuami)}
+          {renderField("RT", pasien.rt)}
+          {renderField("Usia (Tahun)", pasien.umurIbu)}
+          {renderField("Nomor KK", pasien.noKK)}
+          {renderField("Nomor HP", pasien.noTelp)}
+          {renderField("Alamat", pasien.address)}
+          {renderField("Gravida", pasien.gravida)}
+          {renderField("Partus", pasien.partus)}
+          {renderField("Abortus", pasien.abortus)}
+          {renderField("Usia Kandungan (minggu)", pasien.usiaKandunganMinggu)}
+          {renderField("HPM", pasien.hpm)}
+          {renderField("HPL", pasien.hpl)}
+          {renderField("Nomor Jaminan", pasien.nomorJaminan)}
+        </>
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-6">
       <div className="bg-white shadow-md rounded-2xl p-6 w-full max-w-md">
@@ -114,16 +180,7 @@ export default function DetailPasien() {
           Detail {type === "balita" ? "Balita" : "Ibu Hamil"}
         </h2>
 
-        <div className="divide-y divide-gray-200">
-          {Object.entries(pasien).map(([key, value]) => (
-            <div key={key} className="py-2 flex justify-between">
-              <span className="capitalize font-medium text-gray-600">
-                {key.replace(/([A-Z])/g, " $1")}
-              </span>
-              <span className="text-gray-800">{String(value ?? "-")}</span>
-            </div>
-          ))}
-        </div>
+        <div className="divide-y divide-gray-200">{renderDetail()}</div>
 
         {/* Tombol Aksi */}
         <div className="flex justify-between mt-6">

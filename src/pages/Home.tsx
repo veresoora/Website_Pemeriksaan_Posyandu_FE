@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Menu,
   X,
@@ -7,11 +7,56 @@ import {
   HeartPulse,
   LogOut,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom"; // ✅ Tambahan penting
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const Dashboard = () => {
   const [open, setOpen] = useState(false);
-  const navigate = useNavigate(); // ✅ Hook untuk pindah halaman
+  const [kaderName, setKaderName] = useState<string>("Kader");
+  const [role, setRole] = useState<string>(""); // ✅ simpan role user
+  const navigate = useNavigate();
+
+  // Ambil data user login dari localStorage
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        setKaderName(parsedUser.nama_lengkap || "Kader");
+        setRole(parsedUser.role || ""); // ✅ ambil role
+      } catch (err) {
+        console.error("Error parsing user data:", err);
+        setKaderName("Kader");
+      }
+    }
+  }, []);
+
+  // Fungsi logout
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        "http://10.200.180.222:3000/api/auth/logout",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      navigate("/"); // kembali ke halaman login
+    } catch (error) {
+      console.error("Logout error:", error);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/");
+    }
+  };
 
   // Fungsi navigasi
   const handleNavigation = (name: string) => {
@@ -19,15 +64,28 @@ const Dashboard = () => {
     if (name === "Dashboard") navigate("/home");
     else if (name === "Pasien") navigate("/pasien");
     else if (name === "Check Up") navigate("/checkup");
-    else if (name === "Logout") navigate("/");
+    else if (name === "Logout") handleLogout();
   };
+
+  // ================================
+  // MENU SIDEBAR (filter by role)
+  // ================================
+  const menuItems = [
+    { name: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    // hanya tampil jika role meja1
+    ...(role === "meja1"
+      ? [{ name: "Pasien", icon: <Users className="w-5 h-5" /> }]
+      : []),
+    { name: "Check Up", icon: <HeartPulse className="w-5 h-5" /> },
+    { name: "Logout", icon: <LogOut className="w-5 h-5" /> },
+  ];
 
   return (
     <div className="min-h-screen flex bg-gradient-to-b from-blue-50 to-white text-gray-800 relative overflow-hidden">
       {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full w-64 z-40
-          bg-white/30 backdrop-blur-xl border-r border-white/30 shadow-2xl
+          bg-teal-700 text-white border-r border-teal-800 shadow-2xl
           transition-transform duration-500 ease-[cubic-bezier(0.77,0,0.175,1)]
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -47,18 +105,10 @@ const Dashboard = () => {
 
         {/* Navigasi Sidebar */}
         <nav className="flex flex-col space-y-2 p-4">
-          {[
-            {
-              name: "Dashboard",
-              aicon: <LayoutDashboard className="w-5 h-5" />,
-            },
-            { name: "Pasien", icon: <Users className="w-5 h-5" /> },
-            { name: "Check Up", icon: <HeartPulse className="w-5 h-5" /> },
-            { name: "Logout", icon: <LogOut className="w-5 h-5" /> },
-          ].map((item) => (
+          {menuItems.map((item) => (
             <button
               key={item.name}
-              onClick={() => handleNavigation(item.name)} // ✅ diganti agar bisa navigate
+              onClick={() => handleNavigation(item.name)}
               className="flex items-center space-x-3 px-3 py-2 rounded-lg text-left text-white hover:bg-white/20 transition-all duration-200"
             >
               {item.icon}
@@ -95,7 +145,7 @@ const Dashboard = () => {
           {/* Judul Dashboard */}
           <div>
             <h1 className="text-3xl font-bold text-teal-700">Dashboard</h1>
-            <p className="text-gray-600">Kader Meja 2</p>
+            <p className="text-gray-600">{kaderName}</p>
           </div>
         </div>
 

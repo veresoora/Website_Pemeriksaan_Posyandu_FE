@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Menu,
   X,
@@ -15,50 +15,89 @@ const Pasien = () => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"balita" | "ibuHamil">("balita");
+  const [dataPasien, setDataPasien] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
+  const kader = JSON.parse(localStorage.getItem("user") || "{}");
+
+  // ✅ Fetch data pasien dari server
+  const fetchPasien = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+
+      const res = await fetch("http://10.200.180.222:3000/api/pasien", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        setDataPasien(json.data || []);
+      } else {
+        console.error("Gagal memuat data pasien:", json.message);
+      }
+    } catch (error) {
+      console.error("Error fetch pasien:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ Logout handler
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await fetch("http://10.200.180.222:3000/api/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/");
+    }
+  };
+
+  useEffect(() => {
+    fetchPasien();
+  }, []);
 
   const handleNavigation = (name: string) => {
     setOpen(false);
     if (name === "Dashboard") navigate("/home");
     else if (name === "Pasien") navigate("/pasien");
     else if (name === "Check Up") navigate("/checkup");
-    else if (name === "Logout") navigate("/");
+    else if (name === "Logout") handleLogout();
   };
 
-  const dataBalita = [
-    { id: 1, ibu: "Siti Asmara", anak: "Sita Fatimah Zaira", jk: "P", rt: 5 },
-    { id: 2, ibu: "Ratna", anak: "Afan Ezra", jk: "L", rt: 2 },
-    { id: 3, ibu: "Fatma Kunto", anak: "Albertus Domino", jk: "L", rt: 17 },
-    { id: 4, ibu: "Gitanjali", anak: "Piera Laila", jk: "P", rt: 12 },
-  ];
-
-  const dataIbuHamil = [
-    { id: 1, nama: "Dewi Ayu", usiaKandungan: "7 bulan", rt: 3 },
-    { id: 2, nama: "Sulastri", usiaKandungan: "5 bulan", rt: 11 },
-    { id: 3, nama: "Wulan", usiaKandungan: "8 bulan", rt: 8 },
-  ];
-
-  const filteredData =
-    filter === "balita"
-      ? dataBalita.filter(
-          (item) =>
-            item.ibu.toLowerCase().includes(search.toLowerCase()) ||
-            item.anak.toLowerCase().includes(search.toLowerCase())
-        )
-      : dataIbuHamil.filter((item) =>
-          item.nama.toLowerCase().includes(search.toLowerCase())
-        );
+  // ✅ Filter sesuai jenis pasien & pencarian
+  const filteredData = dataPasien
+    .filter((item) =>
+      filter === "balita"
+        ? item.patientType === "balita"
+        : item.patientType === "ibu_hamil"
+    )
+    .filter((item) => item.name?.toLowerCase().includes(search.toLowerCase()));
 
   const handleRowClick = (id: number) => {
-    navigate(`/detailpasien/${id}?type=${filter}`);
-  };
+  navigate(`/detailpasien/${id}?type=${filter === "ibuHamil" ? "ibu_hamil" : "balita"}`);
+};
+
 
   return (
     <div className="min-h-screen flex bg-gradient-to-b from-blue-50 to-white text-gray-800 relative overflow-hidden">
       {/* Sidebar */}
       <aside
         className={`fixed top-0 left-0 h-full w-64 z-40
-          bg-white/30 backdrop-blur-xl border-r border-white/30 shadow-2xl
+          bg-teal-700 text-white border-r border-teal-800 shadow-2xl
           transition-transform duration-500 ease-[cubic-bezier(0.77,0,0.175,1)]
           ${open ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -77,10 +116,7 @@ const Pasien = () => {
 
         <nav className="flex flex-col space-y-2 p-4">
           {[
-            {
-              name: "Dashboard",
-              icon: <LayoutDashboard className="w-5 h-5" />,
-            },
+            { name: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
             { name: "Pasien", icon: <Users className="w-5 h-5" /> },
             { name: "Check Up", icon: <HeartPulse className="w-5 h-5" /> },
             { name: "Logout", icon: <LogOut className="w-5 h-5" /> },
@@ -124,7 +160,7 @@ const Pasien = () => {
             <h1 className="text-3xl font-bold text-teal-700">
               Data Pasien {filter === "balita" ? "Balita" : "Ibu Hamil"}
             </h1>
-            <p className="text-gray-600">Kader Meja 2</p>
+            <p className="text-gray-600">{kader?.nama_lengkap || "-"}</p>
           </div>
         </div>
 
@@ -153,7 +189,6 @@ const Pasien = () => {
             </button>
           </div>
 
-          {/* Tombol Tambah Data */}
           <button
             onClick={() => navigate(`/tambahpasien?type=${filter}`)}
             className="flex items-center gap-2 bg-teal-600 text-white px-5 py-2 rounded-full shadow-md hover:bg-teal-700 transition-all duration-200"
@@ -167,10 +202,8 @@ const Pasien = () => {
           <Search className="text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder={`Cari ${
-              filter === "balita"
-                ? "nama ibu atau anak..."
-                : "nama ibu hamil..."
+            placeholder={`Cari nama ${
+              filter === "balita" ? "balita..." : "ibu hamil..."
             }`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -178,15 +211,23 @@ const Pasien = () => {
           />
         </div>
 
-        {/* Tabel */}
+        {/* Table */}
         <div className="overflow-x-auto">
-          {filter === "balita" ? (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Memuat data...</div>
+          ) : filteredData.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              Tidak ada data pasien.
+            </div>
+          ) : (
             <table className="w-full border-collapse rounded-lg shadow-lg overflow-hidden">
               <thead>
                 <tr className="bg-teal-700 text-white text-left">
                   <th className="px-4 py-3">No</th>
-                  <th className="px-4 py-3">Nama Anak</th>
-                  <th className="px-4 py-3">Nama Ibu</th>
+                  <th className="px-4 py-3">Nama</th>
+                  <th className="px-4 py-3">
+                    {filter === "balita" ? "Nama Ibu" : "Nama Suami"}
+                  </th>
                   <th className="px-4 py-3">RT</th>
                   <th className="px-4 py-3">JK</th>
                 </tr>
@@ -199,45 +240,24 @@ const Pasien = () => {
                     className="border-b last:border-none hover:bg-teal-50 cursor-pointer transition"
                   >
                     <td className="px-4 py-3">{i + 1}</td>
-                    <td className="px-4 py-3">{item.anak}</td>
-                    <td className="px-4 py-3">{item.ibu}</td>
+                    <td className="px-4 py-3">{item.name}</td>
+                    <td className="px-4 py-3">
+                      {filter === "balita"
+                        ? item.motherName
+                        : item.namaSuami}
+                    </td>
                     <td className="px-4 py-3">{item.rt}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-semibold ${
-                          item.jk === "P"
+                          item.gender === "P"
                             ? "bg-pink-100 text-pink-600"
                             : "bg-blue-100 text-blue-600"
                         }`}
                       >
-                        {item.jk}
+                        {item.gender}
                       </span>
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full border-collapse rounded-lg shadow-lg overflow-hidden">
-              <thead>
-                <tr className="bg-teal-700 text-white text-left">
-                  <th className="px-4 py-3">No</th>
-                  <th className="px-4 py-3">Nama Ibu Hamil</th>
-                  <th className="px-4 py-3">Usia Kandungan</th>
-                  <th className="px-4 py-3">RT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredData.map((item: any, i: number) => (
-                  <tr
-                    key={item.id}
-                    onClick={() => handleRowClick(item.id)}
-                    className="border-b last:border-none hover:bg-teal-50 cursor-pointer transition"
-                  >
-                    <td className="px-4 py-3">{i + 1}</td>
-                    <td className="px-4 py-3">{item.nama}</td>
-                    <td className="px-4 py-3">{item.usiaKandungan}</td>
-                    <td className="px-4 py-3">{item.rt}</td>
                   </tr>
                 ))}
               </tbody>

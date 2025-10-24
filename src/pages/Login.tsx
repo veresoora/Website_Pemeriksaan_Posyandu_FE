@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -9,15 +10,37 @@ const Login = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
 
-    // Contoh login sederhana
-    if (username === "admin" && password === "12345") {
-      setError("");
-      navigate("/home");
-    } else {
-      setError("Username atau Password yang dimasukkan salah");
+    try {
+      // Kirim request ke backend (ubah port sesuai backend kamu)
+      const response = await axios.post("http://10.200.180.222:3000/api/auth/login", {
+        username,
+        password,
+      });
+
+      // Jika sukses login
+      if (response.data.success) {
+        const { token, user } = response.data.data;
+
+        // Simpan token & data user ke localStorage
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
+
+        // Arahkan ke halaman home
+        navigate("/home");
+      } else {
+        setError(response.data.message || "Login gagal");
+      }
+    } catch (err: any) {
+      console.error("Login error:", err);
+      if (err.response && err.response.data) {
+        setError(err.response.data.message);
+      } else {
+        setError("Terjadi kesalahan saat login");
+      }
     }
   };
 
